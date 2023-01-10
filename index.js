@@ -1,33 +1,14 @@
-const makeFetch = require('make-fetch')
-const detect = require('detect-port')
-const axios = require('axios')
-const HttpProxyAgent = require('http-proxy-agent').HttpProxyAgent
-const HttpsProxyAgent = require('https-proxy-agent').HttpsProxyAgent
-
-module.exports = function makeIndexFetch (opts = {}) {
-  const DEFAULT_OPTS = { timeout: 30000 }
-  const finalOpts = { ...DEFAULT_OPTS, ...opts }
+module.exports = async function makeIndexFetch (opts = {}) {
+  const makeFetch = require('make-fetch')
+  const {got} = await import('got')
+  const detect = require('detect-port')
+  const HttpProxyAgent = require('http-proxy-agent').HttpProxyAgent
+  const HttpsProxyAgent = require('https-proxy-agent').HttpsProxyAgent
+  const finalOpts = { timeout: 30000, ...opts }
   const mainConfig = {ip: 'localhost', port: 8077}
-  const oui = axios.create({ 'httpAgent': new HttpProxyAgent(`http://${mainConfig.ip}:${mainConfig.port}`), 'httpsAgent': new HttpsProxyAgent(`http://${mainConfig.ip}:${mainConfig.port}`) })
   const useTimeOut = finalOpts.timeout
 
-  function takeCareOfIt(data){
-    console.log(data)
-    throw new Error('aborted')
-  }
-
-  function sendTheData(theSignal, theData){
-    if(theSignal){
-      theSignal.removeEventListener('abort', takeCareOfIt)
-    }
-    return theData
-  }
-
   const fetch = makeFetch(async (request) => {
-
-    if(request.signal){
-      request.signal.addEventListener('abort', takeCareOfIt)
-    }
     
     try {
 
@@ -40,25 +21,18 @@ module.exports = function makeIndexFetch (opts = {}) {
       if(mainURL.hostname === '_'){
         const detectedPort = await detect(mainConfig.port)
         const isItRunning = mainConfig.port !== detectedPort
-        return sendTheData(request.signal, {statusCode: 200, headers: {'Content-Type': 'text/plain; charset=utf-8'}, data: [String(isItRunning)]})
+        return {statusCode: 200, headers: {'Content-Type': 'text/plain; charset=utf-8'}, data: [String(isItRunning)]}
       }
 
       const mainProtocol = mainURL.protocol.includes('s') ? 'https:' : 'http:'
 
       request.url = request.url.replace(mainURL.protocol, mainProtocol)
 
-      request.timeout = (request.headers['x-timer'] && request.headers['x-timer'] !== '0') || (mainURL.searchParams.has('x-timer') && mainURL.searchParams.get('x-timer') !== '0') ? Number(request.headers['x-timer'] || mainURL.searchParams.get('x-timer')) * 1000 : useTimeOut
+      request.timeout = {request: (request.headers['x-timer'] && request.headers['x-timer'] !== '0') || (mainURL.searchParams.has('x-timer') && mainURL.searchParams.get('x-timer') !== '0') ? Number(request.headers['x-timer'] || mainURL.searchParams.get('x-timer')) * 1000 : useTimeOut}
+      request.agent = { 'http': new HttpProxyAgent(`http://${mainConfig.ip}:${mainConfig.port}`), 'https': new HttpsProxyAgent(`http://${mainConfig.ip}:${mainConfig.port}`) }
 
-      request.transformResponse = x => x
-
-      if(request.method === 'POST' || request.method === 'PATCH' || request.method === 'PUT' || request.method === 'DELETE'){
-        const getTheBody = request.body
-        request.data = getTheBody
-        delete request.body
-      }
-
-    const res = await oui.request(request)
-    return sendTheData(request.signal, {statusCode: res.status, headers: res.headers, data: [res.data]})
+      const res = await got(request)
+      return {statusCode: res.statusCode, headers: res.headers, data: [res.body]}
     } catch(e){
       const {mainHead, mainData} = (() => {
         if(request.headers.accept){
@@ -75,7 +49,7 @@ module.exports = function makeIndexFetch (opts = {}) {
           return {mainHead: 'text/plain; charset=utf-8', mainData: [e.name]}
         }
       })()
-      return sendTheData(request.signal, {statusCode: 500, headers: {'X-Error': e.name, 'Content-Type': mainHead}, data: mainData})
+      return {statusCode: 500, headers: {'X-Error': e.name, 'Content-Type': mainHead}, data: mainData}
     }
   })
 
