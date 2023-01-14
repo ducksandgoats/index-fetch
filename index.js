@@ -12,9 +12,7 @@ module.exports = async function makeIndexFetch (opts = {}) {
     
     try {
 
-      const mainURL = new URL(request.url)
-
-      if ((mainURL.protocol !== 'oui:' && mainURL.protocol !== 'ouis:') || !request.method) {
+      if ((!request.url.startsWith('oui:') && !request.url.startsWith('ouis:')) || !request.method) {
         throw new Error(`request is not correct, protocol must be oui:// or ouis://, or requires a method`)
       }
 
@@ -24,9 +22,7 @@ module.exports = async function makeIndexFetch (opts = {}) {
         return {statusCode: 200, headers: {'Content-Type': 'text/plain; charset=utf-8'}, data: [String(isItRunning)]}
       }
 
-      const mainProtocol = mainURL.protocol.includes('s') ? 'https:' : 'http:'
-
-      request.url = request.url.replace(mainURL.protocol, mainProtocol)
+      request.url = request.url.replace('oui', 'http')
 
       request.timeout = {request: (request.headers['x-timer'] && request.headers['x-timer'] !== '0') || (mainURL.searchParams.has('x-timer') && mainURL.searchParams.get('x-timer') !== '0') ? Number(request.headers['x-timer'] || mainURL.searchParams.get('x-timer')) * 1000 : useTimeOut}
       request.agent = { 'http': new HttpProxyAgent(`http://${mainConfig.ip}:${mainConfig.port}`), 'https': new HttpsProxyAgent(`http://${mainConfig.ip}:${mainConfig.port}`) }
