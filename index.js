@@ -1,5 +1,6 @@
 module.exports = async function makeIndexFetch (opts = {}) {
-  const {makeFetch} = await import('make-fetch')
+  const { makeRoutedFetch } = await import('make-fetch')
+  const {fetch, router} = makeRoutedFetch()
   const {got} = await import('got')
   const detect = require('detect-port')
   const HttpProxyAgent = require('http-proxy-agent').HttpProxyAgent
@@ -8,10 +9,24 @@ module.exports = async function makeIndexFetch (opts = {}) {
   const mainConfig = {ip: 'localhost', port: 8077}
   const useTimeOut = finalOpts.timeout
 
-  const fetch = makeFetch(async (request) => {
-    
-    try {
+  function takeCareOfIt(data){
+    console.log(data)
+    throw new Error('aborted')
+  }
 
+  function sendTheData(theSignal, theData){
+    if(theSignal){
+      theSignal.removeEventListener('abort', takeCareOfIt)
+    }
+    return theData
+  }
+
+  async function handleOui(request) {
+    const { url, method, headers: reqHeaders, body, signal, referrer } = request
+
+    if(signal){
+      signal.addEventListener('abort', takeCareOfIt)
+    }
       if ((!request.url.startsWith('oui:') && !request.url.startsWith('ouis:')) || !request.method) {
         throw new Error(`request is not correct, protocol must be oui:// or ouis://, or requires a method`)
       }
@@ -36,26 +51,43 @@ module.exports = async function makeIndexFetch (opts = {}) {
       }
 
       const res = await got(request)
-      return {statusCode: res.statusCode, headers: res.headers, data: [res.body]}
-    } catch(e){
-      const {mainHead, mainData} = (() => {
-        if(request.headers.accept){
-          if(request.headers.accept.includes('text/html')){
-            return {mainHead: 'text/html; charset=utf-8', mainData: [`<html><head><title>${request.url.toString()}</title></head><body><p>${e.name}</p></body></html>`]}
-          } else if(request.headers.accept.includes('application/json')){
-            return {mainHead: 'application/json; charset=utf-8', mainData: [JSON.stringify(e.name)]}
-          } else if(request.headers.accept.includes('text/plain')){
-            return {mainHead: 'text/plain; charset=utf-8', mainData: [e.name]}
-          } else {
-            return {mainHead: 'text/plain; charset=utf-8', mainData: [e.name]}
-          }
-        } else {
-          return {mainHead: 'text/plain; charset=utf-8', mainData: [e.name]}
-        }
-      })()
-      return {statusCode: 500, headers: {'X-Error': e.name, 'Content-Type': mainHead}, data: mainData}
+      return sendTheData(signal, {statusCode: res.statusCode, headers: res.headers, data: [res.body]})
+  }
+
+  async function handleOuis(request) {
+    const { url, method, headers: reqHeaders, body, signal, referrer } = request
+
+    if(signal){
+      signal.addEventListener('abort', takeCareOfIt)
     }
-  })
+      if ((!request.url.startsWith('oui:') && !request.url.startsWith('ouis:')) || !request.method) {
+        throw new Error(`request is not correct, protocol must be oui:// or ouis://, or requires a method`)
+      }
+
+      if(mainURL.hostname === '_'){
+        const detectedPort = await detect(mainConfig.port)
+        const isItRunning = mainConfig.port !== detectedPort
+        return {statusCode: 200, headers: {'Content-Type': 'text/plain; charset=utf-8'}, data: [String(isItRunning)]}
+      }
+
+      request.url = request.url.replace('oui', 'http')
+
+      request.timeout = {request: (request.headers['x-timer'] && request.headers['x-timer'] !== '0') || (mainURL.searchParams.has('x-timer') && mainURL.searchParams.get('x-timer') !== '0') ? Number(request.headers['x-timer'] || mainURL.searchParams.get('x-timer')) * 1000 : useTimeOut}
+      request.agent = { 'http': new HttpProxyAgent(`http://${mainConfig.ip}:${mainConfig.port}`), 'https': new HttpsProxyAgent(`http://${mainConfig.ip}:${mainConfig.port}`) }
+
+      delete request.referrer
+      if(request.method === 'CONNECT' || request.method === 'GET' || request.method === 'HEAD' || request.method === 'OPTIONS' || request.method === 'TRACE'){
+        delete request.body
+      }
+      if(!request.signal){
+        delete request.signal
+      }
+
+    const res = await got(request)
+    return sendTheData(signal, {statusCode: res.statusCode, headers: res.headers, data: [res.body]})
+  }
+  router.any('oui://*/**', handleOui)
+  router.any('ouis://*/**', handleOuis)
 
   return fetch
 }
