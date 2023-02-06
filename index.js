@@ -27,9 +27,7 @@ module.exports = async function makeIndexFetch (opts = {}) {
     if(signal){
       signal.addEventListener('abort', takeCareOfIt)
     }
-      if ((!request.url.startsWith('oui:') && !request.url.startsWith('ouis:')) || !request.method) {
-        throw new Error(`request is not correct, protocol must be oui:// or ouis://, or requires a method`)
-      }
+    const mainURL = new URL(url)
 
       if(mainURL.hostname === '_'){
         const detectedPort = await detect(mainConfig.port)
@@ -60,9 +58,7 @@ module.exports = async function makeIndexFetch (opts = {}) {
     if(signal){
       signal.addEventListener('abort', takeCareOfIt)
     }
-      if ((!request.url.startsWith('oui:') && !request.url.startsWith('ouis:')) || !request.method) {
-        throw new Error(`request is not correct, protocol must be oui:// or ouis://, or requires a method`)
-      }
+    const mainURL = new URL(url)
 
       if(mainURL.hostname === '_'){
         const detectedPort = await detect(mainConfig.port)
