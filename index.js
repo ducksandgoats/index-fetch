@@ -23,9 +23,9 @@ module.exports = async function makeIndexFetch (opts = {}) {
   }
 
 function useAgent(_parsedURL) {
-		if (_parsedURL.protocol === 'http:') {
+		if (_parsedURL.protocol === 'oui:') {
 			return mainAgents.http;
-		} else if(_parsedURL.protocol === 'https:'){
+		} else if(_parsedURL.protocol === 'ouis:'){
 			return mainAgents.https;
     } else {
       throw new Error('protocol is not valid')
