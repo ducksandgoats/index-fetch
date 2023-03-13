@@ -81,7 +81,7 @@ function useAgent(_parsedURL) {
     
     const mainData = await handleData(mainTimeout, nodeFetch(useLink, request))
     
-    return sendTheData(signal, mainData)
+    return sendTheData(signal, {status: mainData.status, headers: mainData.headers, body: mainData.body})
   }
 
   router.any('oui://*/**', handleOui)
